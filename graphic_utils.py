@@ -25,5 +25,5 @@ def show_graphic_from_finance(archivo, numero_velas, moneda):
         ax2.clear()
         mpf.plot(data_to_print, ax=ax1, volume=ax2, type='candle')
 
-    animation.FuncAnimation(fig, animate, interval=60000)
+    ani = animation.FuncAnimation(fig, animate, interval=4000)
     mpf.show()

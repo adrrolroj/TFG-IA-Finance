@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+from torchvision.transforms import transforms
 
 '''
 PyTorch necesita que en las operaciones convolucionales las imagen vengan en formato 
@@ -11,22 +12,15 @@ PyTorch necesita que en las operaciones convolucionales las imagen vengan en for
 
 class Alex_net(nn.Module):
 
-    def __init__(self, pretrained_model, size_exit):
+    def __init__(self, pretrained_model):
         super(Alex_net, self).__init__()
-        self.conv1d_layers_x = nn.Sequential(nn.Conv1d(1, 16, 5, stride=2, padding=2, padding_mode='reflect'),
-                                             nn.ReLU(),
-                                             nn.Conv1d(16, 128, 3, stride=2, padding=1, padding_mode='reflect'),
-                                             )
-        self.conv1d_layers_y = nn.Sequential(nn.Conv1d(1, 16, 5, stride=2, padding=2, padding_mode='reflect'),
-                                             nn.ReLU(),
-                                             nn.Conv1d(16, 128, 3, padding=1, padding_mode='reflect'),
-                                             )
-        self.conv1d_layers_z = nn.Sequential(nn.Conv1d(1, 16, 5, padding=2, padding_mode='reflect'),
-                                             nn.ReLU(),
-                                             nn.Conv1d(16, 128, 3, padding=1, padding_mode='reflect'),
-                                             )
+        self.conv1d_layers = nn.Sequential(nn.Conv1d(1, 32, 7, stride=2),
+                                           nn.Conv1d(32, 128, 5),
+                                           nn.ReLU(inplace=True),
+                                           nn.Conv1d(128, 256, 3)
+                                           )
         self.pretrained = pretrained_model
-        self.my_layers = nn.Sequential(nn.Dropout(p=0.1),
+        self.my_layers = nn.Sequential(nn.Dropout(p=0.3),
                                        nn.Linear(1000, 1000),
                                        nn.ReLU(),
                                        nn.Dropout(p=0.3),
@@ -35,18 +29,20 @@ class Alex_net(nn.Module):
                                        nn.Dropout(p=0.3),
                                        nn.Linear(500, 200),
                                        nn.ReLU(),
-                                       nn.Linear(200, size_exit))
+                                       nn.Linear(200, 3))
 
     def forward(self, x, y, z):
         # Se ejecutan la 3 conv1d para 5 min, 10 min, y 20 min
         x = x.view(1, 1, x.shape[0])
         y = y.view(1, 1, y.shape[0])
         z = z.view(1, 1, z.shape[0])
-        x = self.conv1d_layers_x(x)
-        y = self.conv1d_layers_y(y)
-        z = self.conv1d_layers_z(z)
+        x = self.conv1d_layers(x)
+        y = self.conv1d_layers(y)
+        z = self.conv1d_layers(z)
         # El resultado se concatena para dar lugar a una imagen RGB
         x = torch.cat((x, y, z), 0)
+        #results2 = transforms.ToPILImage()(x).convert("RGB")
+        #results2.save('hola.png')
         x = x.view(-1, 3, x.shape[1], x.shape[2])
         x = self.pretrained(x)
         x = self.my_layers(x)
