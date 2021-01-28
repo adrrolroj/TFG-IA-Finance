@@ -10,7 +10,6 @@ def show_graphic_from_finance(archivo, numero_velas, moneda):
     df = pd.read_csv(archivo, index_col='Datetime')
 
     df.index = pd.to_datetime(df.index, utc=True)
-
     fig = mpf.figure(style='charles', figsize=(7, 7))
 
     ax1 = fig.add_subplot(2, 1, 1)
