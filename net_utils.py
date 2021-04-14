@@ -107,6 +107,8 @@ def train_save_list_models(list_models, trainloader, testloader, epoch, cuda, pa
 def evaluate_list_models(list_models, testloader, n_times, cuda, path):
     list_models_load = []
     stadistics = []
+    combinated_stadistics = []
+    combinated_stadistics.append(['Redes combinadas', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
     # Cargamos los modelos
     print('Cargando modelos...')
     for name, pretrained in list_models:
@@ -151,8 +153,10 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
             a = np.concatenate((criterio, output), axis=0)
             criterio = np.sum(a, axis=0)
             j += 1
+
         # Aplicamos el criterio para elegir la mejor solucion
         result = int(np.argmax(criterio))
+        combinated_stadistics = calculate_stadistic(combinated_stadistics, 0, i, result, real_exit)
         if result == real_exit:
             succes += 1
         # Mostramos los resultados
@@ -162,6 +166,8 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
         if i >= n_times:
             break
     show_stadistics(stadistics)
+    print(' Las estadisticas de las redes combinadas serian:')
+    show_stadistics(combinated_stadistics)
 
 
 def calculate_stadistic(stadistics, j, i, output_number, real_exit):
