@@ -28,42 +28,25 @@ class Net_dataset(Dataset):
         for j in range(idx, idx + size):
             if len(x_train) != self.number_training:
                 percent = limit_one((self.data_close[j] / self.data_close[j - 1] - 1) * 100)
-                x_train.append(percent)
-                y_train.append(percent)
-                z_train.append(percent)
+                if percent >= 0.0:
+                    x_train.append(percent)
+                    y_train.append(0.0)
+                else:
+                    x_train.append(0.0)
+                    y_train.append(abs(percent))
+                if j == idx:
+                    z_train.append(0.0)
+                else:
+                    z_train.append(calculate_tendency(percent, x_train[-2]))
             else:
                 percent = limit_one((self.data_close[j] / self.data_close[j - 1] - 1) * 100)
-                if percent >= 0.060:
+                if percent >= 0.0677:
                     sal_train.append(1)
-                elif percent <= -0.053:
+                elif percent <= -0.0601:
                     sal_train.append(2)
                 else:
                     sal_train.append(0)
-        '''for j in range(idx, idx + size):
-            if j == 0:
-                percent = 0.0
-            else:
-                percent = limit_one((self.data_close[j] / self.data_close[j - 1] - 1) * 100)
-            if len(x_train) != self.number_training:
-                if percent > 0.062:
-                    x_train.append(percent)
-                    y_train.append(0.0)
-                    z_train.append(0.0)
-                elif percent < -0.053:
-                    x_train.append(0.0)
-                    y_train.append(abs(percent))
-                    z_train.append(0.0)
-                else:
-                    x_train.append(0.0)
-                    y_train.append(0.0)
-                    z_train.append(1 - (abs(percent) * 10))
-            else:
-                if percent >= 0.062:
-                    sal_train.append(1)
-                elif percent <= -0.053:
-                    sal_train.append(2)
-                else:
-                    sal_train.append(0)'''
+
         x_train = np.array(x_train)
         y_train = np.array(y_train)
         z_train = np.array(z_train)
@@ -85,3 +68,15 @@ def get_train_test_data(dataset, percent_train, number):
     test_size = len(dataset) - train_size
     data = random_split(dataset, [train_size, test_size], generator=manual_seed(number))
     return data
+
+def calculate_tendency(new_percent, old_percent):
+    if new_percent >= 0.0 and old_percent <= 0.0:
+        return 0.0
+    elif new_percent <= 0.0 and old_percent >= 0.0:
+        return 0.0
+    elif 0.0 <= old_percent <= new_percent:
+        return 1.0
+    elif 0.0 >= old_percent >= new_percent:
+        return 1.0
+    else:
+        return abs(new_percent) / abs(old_percent)

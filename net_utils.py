@@ -47,10 +47,17 @@ def train_model(model, trainloader, testloader, optimizer, criterion, epoch, cud
     return model
 
 
-def train_save_list_models(list_models, trainloader, testloader, epoch, cuda, path):
+def retrain_save_list_models(list_models, trainloader, testloader, epoch, cuda, path):
+    list_models_load = []
+    # Cargamos los modelos
+    print('Cargando modelos...')
     for name, pretrained in list_models:
+        model = AdaptativeNet(pretrained)
+        model.load_state_dict(torch.load(path + '/' + name + '.pth'))
+        list_models_load.append((name, model))
+    print('Modelos cargados, reentrenando...')
+    for name, net in list_models_load:
         print('Entrenamiento para: ' + name)
-        net = AdaptativeNet(pretrained)
         for param in net.pretrained.parameters():
             param.requires_grad = False
         for param in net.conv1d_layers.parameters():
@@ -72,10 +79,35 @@ def train_save_list_models(list_models, trainloader, testloader, epoch, cuda, pa
         torch.save(net.state_dict(), path + '/' + name + '.pth')
 
 
+def train_save_list_models(list_models, trainloader, testloader, epoch, cuda, path):
+    for name, pretrained in list_models:
+        print('Entrenamiento para: ' + name)
+        net = AdaptativeNet(pretrained)
+        for param in net.pretrained.parameters():
+            param.requires_grad = False
+        # for param in net.conv1d_layers.parameters():
+        #    param.requires_grad = False
+        parameters = []
+        parameters.extend(net.conv1d_layers.parameters())
+        parameters.extend(net.my_layers.parameters())
+        parameters.extend(net.pretrained.parameters())
+
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(parameters, lr=0.00005)
+
+        if cuda:
+            net.to('cuda')
+            net = train_model(net, trainloader, testloader, optimizer, criterion, epoch=epoch, cuda=True)
+        else:
+            net = train_model(net, trainloader, testloader, optimizer, criterion, epoch=epoch, cuda=False)
+
+        torch.save(net.state_dict(), path + '/' + name + '.pth')
+
+
 def evaluate_list_models(list_models, testloader, n_times, cuda, path):
     list_models_load = []
     stadistics = []
-    #Cargamos los modelos
+    # Cargamos los modelos
     print('Cargando modelos...')
     for name, pretrained in list_models:
         model = AdaptativeNet(pretrained)
@@ -85,7 +117,7 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
     print('Modelos cargados, evaluando...')
     i = 0
     succes = 0
-    #Calculamos la salida por cada modelo
+    # Calculamos la salida por cada modelo
     for x_train, y_train, z_train, sal_train in testloader:
         i += 1
         x_train = x_train.float()
@@ -96,10 +128,11 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
             x_train = x_train.to('cuda')
             y_train = y_train.to('cuda')
             z_train = z_train.to('cuda')
-        criterio = [0.0, 0.0, 0.0]
+        criterio = np.array([0.0, 0.0, 0.0])
         list_results = []
         j = 0
         for name, net in list_models_load:
+            net.eval()
             if cuda:
                 net.to('cuda')
                 output = net(x_train, y_train, z_train)
@@ -109,51 +142,49 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
                 output = output.detach().numpy()
             exit_values = ('CERO', 'SUBE', 'BAJA')
             output_number = int(np.argmax(output))
-            #Calculamos estadisticas
-            if output_number == 0:
-                if i >= 8:
-                    criterio[0] += stadistics[j][9] * stadistics[j][11]
-                else:
-                    criterio[0] += 1
-                stadistics[j][3] += 1
-                if output_number == real_exit:
-                    stadistics[j][6] += 1
-                    stadistics[j][10] += 1
-                    stadistics[j][9] = stadistics[j][6] / stadistics[j][3]
-            elif output_number == 1:
-                if i >= 8:
-                    criterio[1] += stadistics[j][7] * stadistics[j][11]
-                else:
-                    criterio[1] += 1
-                stadistics[j][1] += 1
-                if output_number == real_exit:
-                    stadistics[j][4] += 1
-                    stadistics[j][10] += 1
-                    stadistics[j][7] = stadistics[j][4] / stadistics[j][1]
-            else:
-                if i >= 8:
-                    criterio[2] += stadistics[j][8] * stadistics[j][11]
-                else:
-                    criterio[2] += 1
-                stadistics[j][2] += 1
-                if output_number == real_exit:
-                    stadistics[j][5] += 1
-                    stadistics[j][10] += 1
-                    stadistics[j][8] = stadistics[j][5] / stadistics[j][2]
-            stadistics[j][11] = stadistics[j][10] / i
+            # Calculamos estadisticas
+            stadistics = calculate_stadistic(stadistics, j, i, output_number, real_exit)
             list_results.append([name, exit_values[output_number]])
+            criterio = np.reshape(criterio, (1, 3))
+            if i >= 8:
+                output = output * stadistics[j][11]
+            a = np.concatenate((criterio, output), axis=0)
+            criterio = np.sum(a, axis=0)
             j += 1
         # Aplicamos el criterio para elegir la mejor solucion
         result = int(np.argmax(criterio))
         if result == real_exit:
             succes += 1
-        #Mostramos los resultados
+        # Mostramos los resultados
         print(
-            f'Ejecucion:{i}, Prediccion: subidas: {criterio[1]}, bajadas: {criterio[2]}, ceros: {criterio[0]}, Resultado real:{exit_values[real_exit]}, Precision acumulada: {succes / i}')
+            f'Ejecucion:{i}, Prediccion: {exit_values[result]}, Resultado real:{exit_values[real_exit]}, Precision acumulada: {succes / i}')
         print(list_results)
         if i >= n_times:
             break
     show_stadistics(stadistics)
+
+
+def calculate_stadistic(stadistics, j, i, output_number, real_exit):
+    if output_number == 0:
+        stadistics[j][3] += 1
+        if output_number == real_exit:
+            stadistics[j][6] += 1
+            stadistics[j][10] += 1
+            stadistics[j][9] = stadistics[j][6] / stadistics[j][3]
+    elif output_number == 1:
+        stadistics[j][1] += 1
+        if output_number == real_exit:
+            stadistics[j][4] += 1
+            stadistics[j][10] += 1
+            stadistics[j][7] = stadistics[j][4] / stadistics[j][1]
+    else:
+        stadistics[j][2] += 1
+        if output_number == real_exit:
+            stadistics[j][5] += 1
+            stadistics[j][10] += 1
+            stadistics[j][8] = stadistics[j][5] / stadistics[j][2]
+    stadistics[j][11] = stadistics[j][10] / i
+    return stadistics
 
 
 def show_stadistics(stadistics):
@@ -172,7 +203,18 @@ def show_stadistics(stadistics):
                                                                                                    'Precision'))
     print(dash)
     for stad in stadistics:
-        print('{:<15s}{:<8s}{:<8s}{:<8s}{:<12s}{:<12s}{:<12s}{:<15s}{:<15s}{:<15s}{:<10s}{:<10s}'.format(str(stad[0]), str(stad[1]), str(stad[2]), str(stad[3]), str(stad[4]), str(stad[5]), str(stad[6]), str(round(stad[7], 4)), str(round(stad[8], 4)), str(round(stad[9], 4)), str(stad[10]), str(stad[11])))
+        print('{:<15s}{:<8s}{:<8s}{:<8s}{:<12s}{:<12s}{:<12s}{:<15s}{:<15s}{:<15s}{:<10s}{:<10s}'.format(str(stad[0]),
+                                                                                                         str(stad[1]),
+                                                                                                         str(stad[2]),
+                                                                                                         str(stad[3]),
+                                                                                                         str(stad[4]),
+                                                                                                         str(stad[5]),
+                                                                                                         str(stad[6]),
+                                                                                                         str(round(
+                                                                                                             stad[7],
+                                                                                                             4)), str(
+                round(stad[8], 4)), str(round(stad[9], 4)), str(stad[10]), str(stad[11])))
+
 
 def evaluate_model(model, dataloader, n_times, cuda, show=True):
     number = success = ceros = bajadas = subidas = 0
@@ -259,3 +301,37 @@ def evaluate_random(dataloader, n_times, show=True):
     print(f'CEROS acertados: {ceros}, CEROS totales {ceros_real}, porcentaje: {ceros / ceros_real}')
     print(f'SUBIDAS acertados: {subidas}, SUBIDAS totales {subidas_real}, porcentaje: {subidas / subidas_real}')
     print(f'BAJADAS acertados: {bajadas}, BAJADAS totales {bajadas_real}, porcentaje: {bajadas / bajadas_real}')
+
+
+def predict(list_models_load, loader, cuda):
+    exit_values = ('CERO', 'SUBE', 'BAJA')
+    x_train, y_train, z_train = next(iter(loader))
+    x_train = x_train.float()
+    y_train = y_train.float()
+    z_train = z_train.float()
+    if cuda:
+        x_train = x_train.to('cuda')
+        y_train = y_train.to('cuda')
+        z_train = z_train.to('cuda')
+    criterio = np.array([0.0, 0.0, 0.0])
+    list_results = []
+    j = 0
+    for name, net in list_models_load:
+        net.eval()
+        if cuda:
+            net.to('cuda')
+            output = net(x_train, y_train, z_train)
+            output = output.cpu().detach().numpy()
+        else:
+            output = net(x_train, y_train, z_train)
+            output = output.detach().numpy()
+        output_number = int(np.argmax(output))
+        list_results.append([name, exit_values[output_number]])
+        criterio = np.reshape(criterio, (1, 3))
+        a = np.concatenate((criterio, output), axis=0)
+        criterio = np.sum(a, axis=0)
+        j += 1
+    # Aplicamos el criterio para elegir la mejor solucion
+    result = exit_values[int(np.argmax(criterio))]
+    # Mostramos los resultados
+    return result
