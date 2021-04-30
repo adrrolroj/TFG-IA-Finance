@@ -1,11 +1,14 @@
+import math
+
 import numpy as np
 
 import torch
 from random import randint
 import torch.nn as nn
 import torch.optim as optim
-
+import pandas as pd
 from nets import AdaptativeNet
+from stac_files.nonparametric_tests import friedman_test, holm_test
 
 
 def train_model(model, trainloader, testloader, optimizer, criterion, epoch, cuda):
@@ -109,6 +112,12 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
     stadistics = []
     combinated_stadistics = []
     combinated_stadistics.append(['Redes combinadas', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+    # Estadisticas para el test de friedman
+    stadistics_fried = []
+    combinated_stadistics_fried = []
+    combinated_stadistics_fried.append(['Redes combinadas', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+    evaluations = math.ceil(n_times / 30)
+    error_dataframe = {}
     # Cargamos los modelos
     print('Cargando modelos...')
     for name, pretrained in list_models:
@@ -116,6 +125,9 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
         model.load_state_dict(torch.load(path + '/' + name + '.pth'))
         list_models_load.append((name, model))
         stadistics.append([name, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+        stadistics_fried.append([name, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+        error_dataframe[str(name)] = []
+    error_dataframe['Combinadas'] = []
     print('Modelos cargados, evaluando...')
     i = 0
     succes = 0
@@ -146,6 +158,7 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
             output_number = int(np.argmax(output))
             # Calculamos estadisticas
             stadistics = calculate_stadistic(stadistics, j, i, output_number, real_exit)
+            stadistics_fried = calculate_stadistic(stadistics_fried, j, evaluations, output_number, real_exit)
             list_results.append([name, exit_values[output_number]])
             criterio = np.reshape(criterio, (1, 3))
             if i >= 8:
@@ -157,17 +170,65 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
         # Aplicamos el criterio para elegir la mejor solucion
         result = int(np.argmax(criterio))
         combinated_stadistics = calculate_stadistic(combinated_stadistics, 0, i, result, real_exit)
+        combinated_stadistics_fried = calculate_stadistic(combinated_stadistics_fried, 0, evaluations, result,
+                                                          real_exit)
         if result == real_exit:
             succes += 1
         # Mostramos los resultados
         print(
             f'Ejecucion:{i}, Prediccion: {exit_values[result]}, Resultado real:{exit_values[real_exit]}, Precision acumulada: {succes / i}')
         print(list_results)
+        if i % evaluations == 0:
+            z = 0
+            new_stadistics = []
+            new_combinated_stadistics = []
+            new_combinated_stadistics.append(['Redes combinadas', 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+            for name, net in list_models_load:
+                error_dataframe[str(name)].append(1 - stadistics_fried[z][11])
+                new_stadistics.append([name, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+                z = z + 1
+            error_dataframe['Combinadas'].append(1 - combinated_stadistics_fried[0][11])
+            stadistics_fried = new_stadistics
+            combinated_stadistics_fried = new_combinated_stadistics
         if i >= n_times:
             break
+    # df = pd.DataFrame(success_dataframe)
+    # df.to_csv('/content/drive/MyDrive/TFG/data/estadistica_redes.csv')
     show_stadistics(stadistics)
     print(' Las estadisticas de las redes combinadas serian:')
     show_stadistics(combinated_stadistics)
+    vgg = list(error_dataframe.values())[0]
+    alexnet = list(error_dataframe.values())[1]
+    resnet = list(error_dataframe.values())[2]
+    squeezenet = list(error_dataframe.values())[3]
+    densenet = list(error_dataframe.values())[4]
+    googlenet = list(error_dataframe.values())[5]
+    shufflenet = list(error_dataframe.values())[6]
+    mobilenet = list(error_dataframe.values())[7]
+    resnext = list(error_dataframe.values())[8]
+    wide_resnet = list(error_dataframe.values())[9]
+    combinated = list(error_dataframe.values())[10]
+    f, p, ranking, pivot = friedman_test(vgg, alexnet, resnet, squeezenet, densenet, googlenet, shufflenet, mobilenet,
+                                         resnext, wide_resnet, combinated)
+    print('ESTADISTICAS DEL TEST DE FRIEDMAN')
+    print('F-Value:' + str(f))
+    print('P-Value:' + str(p))
+    print('Ranking:')
+    print(str(list(error_dataframe.keys())))
+    print(ranking)
+    print('Pivot:')
+    print(str(list(error_dataframe.keys())))
+    print(pivot)
+    w = 0
+    pivots = {}
+    for name in list(error_dataframe.keys()):
+        pivots[str(name)] = list(pivot)[w]
+        w += 1
+    comparions, z, new_p, adjusted_p = holm_test(pivots, control='Combinadas')
+    print('ESTADISTICAS DEL TEST DE HOLM')
+    print('Comparions: ' + str(comparions))
+    print('P-Values:' + str(new_p))
+    print('Adjusted P-Values:' + str(adjusted_p))
 
 
 def calculate_stadistic(stadistics, j, i, output_number, real_exit):
