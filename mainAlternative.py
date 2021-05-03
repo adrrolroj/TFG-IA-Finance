@@ -59,7 +59,7 @@ elif option == '4':
     eval = input('Numero de evaluaciones: ')
 
     net_dataset = Net_dataset("data/ETH-USD-5m.csv", 150)
-    train_set, test_set = get_train_test_data(net_dataset, 0.94, 42)
+    train_set, test_set = get_train_test_data(net_dataset, 0.94, 39)
 
     testloader = torch.utils.data.DataLoader(test_set, shuffle=True, num_workers=2)
 
