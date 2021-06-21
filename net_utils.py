@@ -197,38 +197,41 @@ def evaluate_list_models(list_models, testloader, n_times, cuda, path):
     show_stadistics(stadistics)
     print(' Las estadisticas de las redes combinadas serian:')
     show_stadistics(combinated_stadistics)
-    vgg = list(error_dataframe.values())[0]
-    alexnet = list(error_dataframe.values())[1]
-    resnet = list(error_dataframe.values())[2]
-    squeezenet = list(error_dataframe.values())[3]
-    densenet = list(error_dataframe.values())[4]
-    googlenet = list(error_dataframe.values())[5]
-    shufflenet = list(error_dataframe.values())[6]
-    mobilenet = list(error_dataframe.values())[7]
-    resnext = list(error_dataframe.values())[8]
-    wide_resnet = list(error_dataframe.values())[9]
-    combinated = list(error_dataframe.values())[10]
-    f, p, ranking, pivot = friedman_test(vgg, alexnet, resnet, squeezenet, densenet, googlenet, shufflenet, mobilenet,
+    if len(error_dataframe.values())!=11:
+        print('Para realizar los test de friedman y holm debes seleccionar evaluar todas las redes')
+    else:
+        vgg = list(error_dataframe.values())[0]
+        alexnet = list(error_dataframe.values())[1]
+        resnet = list(error_dataframe.values())[2]
+        squeezenet = list(error_dataframe.values())[3]
+        densenet = list(error_dataframe.values())[4]
+        googlenet = list(error_dataframe.values())[5]
+        shufflenet = list(error_dataframe.values())[6]
+        mobilenet = list(error_dataframe.values())[7]
+        resnext = list(error_dataframe.values())[8]
+        wide_resnet = list(error_dataframe.values())[9]
+        combinated = list(error_dataframe.values())[10]
+        f, p, ranking, pivot = friedman_test(vgg, alexnet, resnet, squeezenet, densenet, googlenet, shufflenet, mobilenet,
                                          resnext, wide_resnet, combinated)
-    print('ESTADISTICAS DEL TEST DE FRIEDMAN')
-    print('F-Value:' + str(f))
-    print('P-Value:' + str(p))
-    print('Ranking:')
-    print(str(list(error_dataframe.keys())))
-    print(ranking)
-    print('Pivot:')
-    print(str(list(error_dataframe.keys())))
-    print(pivot)
-    w = 0
-    pivots = {}
-    for name in list(error_dataframe.keys()):
-        pivots[str(name)] = list(pivot)[w]
-        w += 1
-    comparions, z, new_p, adjusted_p = holm_test(pivots, control='Combinadas')
-    print('ESTADISTICAS DEL TEST DE HOLM')
-    print('Comparions: ' + str(comparions))
-    print('P-Values:' + str(new_p))
-    print('Adjusted P-Values:' + str(adjusted_p))
+        print('ESTADISTICAS DEL TEST DE FRIEDMAN')
+        print('F-Value:' + str(f))
+        print('P-Value:' + str(p))
+        print('Ranking:')
+        print(str(list(error_dataframe.keys())))
+        print(ranking)
+        print('Pivot:')
+        print(str(list(error_dataframe.keys())))
+        print(pivot)
+        w = 0
+        pivots = {}
+        for name in list(error_dataframe.keys()):
+            pivots[str(name)] = list(pivot)[w]
+            w += 1
+        comparions, z, new_p, adjusted_p = holm_test(pivots, control='Combinadas')
+        print('ESTADISTICAS DEL TEST DE HOLM')
+        print('Comparions: ' + str(comparions))
+        print('P-Values:' + str(new_p))
+        print('Adjusted P-Values:' + str(adjusted_p))
 
 
 def calculate_stadistic(stadistics, j, i, output_number, real_exit):
